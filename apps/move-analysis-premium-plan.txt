@@ -1,0 +1,205 @@
+MOVE ANALYSIS — FREEMIUM IMPLEMENTATION PLAN
+============================================
+
+GOAL
+----
+Add move analysis to the game (brilliant, excellent, good, blunder, etc.)
+and make the in-depth analysis a premium feature in the future.
+
+Design it as freemium from day one, even before payments exist.
+Build one analysis engine and unlock features by tier.
+
+FREE VS PREMIUM
+---------------
+Free:
+- Move-quality counts
+- Player's moves only
+- Basic summary
+
+Premium:
+- Opponent analysis
+- Move-by-move badges
+- Best move per position
+- Evaluation graph
+- Key moments / accuracy
+- Deeper engine depth
+- PGN import
+- Saved reviews
+- Live analysis
+
+The free tier gives the hook:
+"You had 1 brilliant, 2 mistakes, 1 blunder."
+Premium explains where and why.
+
+STEP 1 — ADD AN ENTITLEMENT SERVICE
+-----------------------------------
+Create: core/services/premium.service.ts
+
+Example:
+
+@Injectable({ providedIn: 'root' })
+export class PremiumService {
+  readonly isPremium = signal(false);
+
+  canUse(feature: PremiumFeature): boolean {
+    return this.isPremium() || !PREMIUM_ONLY.has(feature);
+  }
+}
+
+For now, read from localStorage or a hardcoded flag.
+Replace this with real subscription/backend checks later.
+
+STEP 2 — ADD ANALYSIS TIERS
+---------------------------
+Add types:
+
+export type AnalysisTier = 'basic' | 'premium';
+
+export interface AnalysisOptions {
+  tier: AnalysisTier;
+  depth: number;
+  multiPV: number;
+  analyzeOpponent: boolean;
+  includeBestMoves: boolean;
+  includeEvalGraph: boolean;
+}
+
+Basic example:
+
+const basic: AnalysisOptions = {
+  tier: 'basic',
+  depth: 10,
+  multiPV: 1,
+  analyzeOpponent: false,
+  includeBestMoves: false,
+  includeEvalGraph: false
+};
+
+Premium example:
+
+const premium: AnalysisOptions = {
+  tier: 'premium',
+  depth: 16,
+  multiPV: 2,
+  analyzeOpponent: true,
+  includeBestMoves: true,
+  includeEvalGraph: true
+};
+
+Pass these options into the analysis engine.
+
+STEP 3 — KEEP ONE ANALYSIS PIPELINE
+-----------------------------------
+Do not build two analyzers.
+
+1. Game ends.
+2. Read the user's tier.
+3. Run basic or premium analysis.
+4. Store the result with tier and depth.
+5. UI decides what to show.
+
+Only run premium-depth analysis if the user is entitled.
+Do not calculate premium data and merely hide it.
+
+IMPORTANT:
+Do not reuse the bot's Stockfish engine for analysis.
+The bot listens for bestMove and will try to play the analysis move.
+Use a separate analysis worker/engine.
+
+STEP 4 — SHOW LOCKED PREMIUM UI
+-------------------------------
+Game-over summary example:
+
+Move Quality
+
+Brilliant 1   Excellent 18   Good 12   Blunder 1
+
+[locked] See every move, best moves, and where it went wrong.
+[Unlock full analysis]
+
+Premium-only sections can be:
+- blurred
+- shown with a lock icon
+- hidden with an upgrade card
+- shown as a one-move teaser
+
+Teaser example:
+
+Move 24: Blunder — you played Qd7
+[locked] Premium shows the best move and full explanation.
+
+STEP 5 — GATE ROUTES AND ACTIONS
+--------------------------------
+Protect these with PremiumService:
+- /analysis PGN import
+- Analyze opponent
+- Open full review
+- Live analysis toggle
+- Deep analysis
+- Saved reviews
+
+If the user is not premium, open an upgrade dialog instead.
+
+STEP 6 — ADD TRANSLATIONS NOW
+-----------------------------
+Add keys to all four dictionaries in core/i18n/app-i18n.ts:
+English, Arabic, French, Spanish.
+
+Suggested keys:
+
+premium.badge
+premium.locked
+premium.upgrade
+premium.title
+premium.subtitle
+premium.feature.bestMoves
+premium.feature.evalGraph
+premium.feature.opponent
+premium.feature.savedReviews
+premium.feature.liveAnalysis
+premium.comingSoon
+
+Also add move-quality keys:
+
+analysis.quality.title
+analysis.quality.brilliant
+analysis.quality.great
+analysis.quality.excellent
+analysis.quality.good
+analysis.quality.inaccuracy
+analysis.quality.mistake
+analysis.quality.blunder
+analysis.quality.you
+analysis.quality.opponent
+analysis.quality.both
+analysis.quality.analyzing
+analysis.quality.accuracy
+analysis.quality.bestMove
+analysis.quality.review
+
+Missing keys in any language will break the typed build.
+Make the lock text, counts, and upgrade dialog RTL-ready.
+
+STEP 7 — ADD BACKEND ENFORCEMENT LATER
+--------------------------------------
+Frontend gating is only cosmetic.
+
+When accounts/payments are added:
+- Backend checks the subscription.
+- Backend returns an analysis token or runs the analysis.
+- Never trust isPremium from the browser.
+- Keep premium analysis results tied to the user.
+- Do not expose premium data through direct API calls.
+
+RECOMMENDED BUILD ORDER
+-----------------------
+1. Basic free counts.
+2. Premium service + feature flags.
+3. Premium review UI, locked by default.
+4. Upgrade dialog.
+5. Real payments/backend enforcement.
+6. Live analysis as a premium feature.
+
+SHIP THE FREE VERSION FIRST
+---------------------------
+Premium then becomes an unlock, not a rewrite.

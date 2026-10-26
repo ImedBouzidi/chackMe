@@ -1,0 +1,21 @@
+billing:
+  grace-days: 3
+  free-daily-limits:
+    REVIEW: 3
+    PUZZLE_ATTEMPT: 20
+  product-plans:               # store product id / Stripe price id -> plan
+    premium_monthly: PREMIUM
+    premium_yearly: PREMIUM
+    price_XXXXXXXX_monthly: PREMIUM
+    price_XXXXXXXX_yearly: PREMIUM
+  google:
+    package-name: com.example.chessplatform
+    rtdn-audience: https://api.example.com/api/billing/google/rtdn
+    rtdn-service-account: pubsub-push@your-project.iam.gserviceaccount.com
+  stripe:
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET}   # from the secret manager, never from Git
+    success-url: https://app.example.com/premium/success
+    cancel-url: https://app.example.com/premium
+    prices:
+      monthly: price_XXXXXXXX_monthly
+      yearly: price_XXXXXXXX_yearly

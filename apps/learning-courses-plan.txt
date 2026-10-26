@@ -1,0 +1,191 @@
+LEARNING / COURSES SECTION — FREE + PREMIUM BUILD PLAN
+======================================================
+
+SHORT ANSWER
+------------
+You do NOT need to download a Lichess dataset to build courses.
+
+Courses are AUTHORED CONTENT (lessons, positions, explanations,
+exercises), not downloaded games.
+
+A Lichess dataset only helps for three separate features:
+  - Puzzles
+  - Opening statistics
+  - Game import
+
+Current state: src/app/features/learn/learn.component.ts is a static
+marketing page. There is no course model, no player, no progress, and no
+premium service yet.
+
+
+WHAT YOU ACTUALLY NEED
+----------------------
+
+1. CONTENT (this is ~80% of the work)
+--------------------------------------
+A course is not code, it is a curriculum:
+
+    Course -> Modules -> Lessons -> Steps
+
+- 1 free course, fully playable
+  (e.g. "Foundations": board, pieces, basic mates, first tactics)
+- Premium courses locked behind the paywall
+  (openings, middlegame plans, endgames)
+
+Cheapest authoring pipeline:
+  1. Write each lesson as a Lichess Study (real board, arrows, comments).
+  2. Export the study as PGN with comments.
+  3. Parse the PGN into lesson steps.
+  4. Ship it as data.
+
+Author once. Do not hand-write FENs in TypeScript.
+
+
+2. A LESSON DATA MODEL
+----------------------
+Match the existing typed Angular style:
+
+    type Tier = 'free' | 'premium';
+
+    interface Course {
+      id: string;
+      slug: string;
+      tier: Tier;
+      level: 'beginner' | 'intermediate' | 'advanced';
+      moduleIds: string[];
+    }
+
+    interface Module {
+      id: string;
+      courseId: string;
+      order: number;
+      lessonIds: string[];
+    }
+
+    interface Lesson {
+      id: string;
+      moduleId: string;
+      order: number;
+      steps: LessonStep[];
+    }
+
+    type LessonStep =
+      | { kind: 'text';     bodyKey: string }
+      | { kind: 'position'; fen: string; arrows?: string[]; highlights?: string[]; bodyKey: string }
+      | { kind: 'task';     fen: string; solution: string[]; hint?: string; bodyKey: string }
+      | { kind: 'pgn';      pgn: string; bodyKey: string };
+
+The 'task' step is the interactive one: the user must play the solution
+moves. Validate with chess.js.
+
+
+3. A LESSON PLAYER
+------------------
+Reuse what is already installed: cm-chessboard, chess.js, Angular Material.
+
+Requirements:
+  - board + step navigation (next / back)
+  - "play the move" validation via chess.js
+  - progress bar + completion state
+  - RTL-safe layout (Arabic is supported)
+
+Suggested location:
+  features/learn/lesson-player.component.ts
+
+Suggested route:
+  /learn/:courseId/:lessonId
+
+
+4. FREE VS PREMIUM GATING
+-------------------------
+Reuse the model from move-analysis-premium-plan.txt:
+
+  - core/services/premium.service.ts
+      isPremium signal + canUse(feature)
+  - PREMIUM_ONLY set of feature keys
+      e.g. course.advanced, lesson.beyondFree, review.saved
+  - core/guards/premium.guard.ts
+      locked route -> redirect to upgrade dialog
+  - Locked catalog UI
+      lock icon + blurred lesson list + "Unlock" CTA
+
+Recommended free tier:
+  One complete course + lesson 1 of every other course.
+  That is the hook; the rest is the upsell. Do not make free a dead end.
+
+IMPORTANT:
+PremiumService.isPremium in the browser is cosmetic. When the backend
+exists, enforce the tier server-side and never expose premium course
+payloads through a direct API call.
+
+
+5. PROGRESS TRACKING
+--------------------
+MVP:
+  localStorage, keyed by user id (ProgressService).
+
+Later:
+  Backend table: lesson_progress(user_id, lesson_id, completed_at).
+
+Also needed later:
+  GET  /courses
+  GET  /courses/:id
+  GET  /progress
+  POST /progress
+  GET  /entitlements
+
+To ship the free course before any backend exists, keep the course data as
+static JSON under assets/courses/.
+
+
+6. I18N
+-------
+core/i18n/app-i18n.ts is a typed dictionary with 4 languages.
+Missing keys in any language break the build.
+
+Rules:
+  - Add learn.* / premium.* keys in ALL FOUR languages at the same time
+    (en, ar, fr, es).
+  - Course CONTENT text belongs in per-locale JSON files, not in the
+    translation dictionary.
+
+
+7. SUGGESTED BUILD ORDER
+------------------------
+  1. Course/Module/Lesson models + 6 lessons of one free course as
+     static JSON.
+  2. LessonPlayerComponent reusing cm-chessboard + chess.js.
+  3. PremiumService + premiumGuard + locked catalog cards.
+  4. i18n keys in all four dictionaries.
+  5. ProgressService backed by localStorage.
+  6. Only then: puzzles (Lichess puzzle DB), then backend entitlements.
+
+Ship the free course first. Premium becomes an unlock, not a rewrite.
+
+
+DO YOU NEED LICHESS DATA?
+-------------------------
+
+  Feature                    | Lichess needed? | What to use
+  ---------------------------|-----------------|--------------------------------
+  Courses / lessons          | No              | Your own authored PGNs
+  Puzzles section            | Yes (or author) | lichess_db_puzzle.csv.zst
+                             |                 | CC0, ~5M puzzles, ~250 MB zst
+  Opening names / ECO        | Small file      | github.com/lichess-org/chess-openings
+                             |                 | ~3.5k lines, tiny, CC0
+  Opening explorer stats     | API, not a file | https://explorer.lichess.ovh/lichess
+                             |                 | or /masters
+  Real games database        | Never           | Full Lichess games DB is hundreds
+                             |                 | of GB — not needed
+
+Conclusion:
+The only dataset worth downloading soon is the PUZZLE DB, and only if a
+tactics feature is being built. For courses, download nothing.
+
+LICENSING NOTES
+---------------
+  - Lichess puzzle DB and chess-openings are CC0: commercial use is fine.
+  - Authored course text/positions must be yours or licensed.
+  - Do not scrape Chessable / Chess.com courses.
+  - Do not embed Lichess Studies directly if premium gating matters —
+    import the PGN instead.
